@@ -7,6 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
     <style>
         /* Strict Brutalist Academic & Nature Theme */
         :root {
@@ -276,8 +277,23 @@
             outline: none;
         }
         
-        .chat-input-area button {
-            align-self: flex-end;
+        .chat-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-visualize {
+            background-color: var(--sage-green);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .btn-send {
             background-color: var(--earth-brown);
             color: white;
             border: none;
@@ -290,6 +306,17 @@
         .chat-input-area button:disabled {
             background-color: #ccc;
             cursor: not-allowed;
+        }
+
+        /* Mermaid Diagram Styling */
+        .mermaid {
+            background-color: white;
+            border: var(--border-thin);
+            padding: 15px;
+            margin: 15px 0;
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
         }
 
         /* Modal for adding documents manually */
@@ -389,7 +416,10 @@
             </div>
             <div class="chat-input-area">
                 <textarea id="user-query" placeholder="Ask a question about the active documents..."></textarea>
-                <button id="send-btn" onclick="submitQuery()" disabled>Send Query</button>
+                <div class="chat-actions">
+                    <button class="btn-visualize" id="viz-btn" onclick="generateDiagram()" disabled>Visualize Protocol</button>
+                    <button class="btn-send" id="send-btn" onclick="submitQuery()" disabled>Send Query</button>
+                </div>
             </div>
         </div>
     </div>
@@ -422,6 +452,33 @@
         // Set tracking which documents are "active" for the AI context
         let activeDocIds = new Set([1, 3]);
         let viewingDocId = null;
+
+        // --- Persistent Storage Logic ---
+        function saveState() {
+            localStorage.setItem('aidRouterApiKey', apiKey);
+            localStorage.setItem('aidRouterDocs', JSON.stringify(documents));
+            localStorage.setItem('aidRouterActiveDocs', JSON.stringify(Array.from(activeDocIds)));
+        }
+
+        function loadState() {
+            const savedDocs = localStorage.getItem('aidRouterDocs');
+            if (savedDocs) {
+                documents = JSON.parse(savedDocs);
+                docCounter = documents.length > 0 ? Math.max(...documents.map(d => d.id)) : 0;
+            }
+
+            const savedActive = localStorage.getItem('aidRouterActiveDocs');
+            if (savedActive) {
+                activeDocIds = new Set(JSON.parse(savedActive));
+            }
+
+            const savedKey = localStorage.getItem('aidRouterApiKey');
+            if (savedKey) {
+                const input = document.getElementById('api-key');
+                input.value = savedKey;
+                connectAPI(); // Auto-connect if key was previously saved
+            }
+        }
 
         // --- Core UI Functions ---
         function renderSourceList() {
@@ -468,6 +525,7 @@
             } else {
                 activeDocIds.add(id);
             }
+            saveState();
             renderSourceList();
         }
 
@@ -548,6 +606,7 @@
             const newDoc = { id: docCounter, title: title, content: content };
             documents.push(newDoc);
             activeDocIds.add(newDoc.id); // Default to active
+            saveState();
             renderSourceList();
             viewDocument(newDoc.id); // Auto-view the new doc
             appendMessage(`System Log: Added new source [DOC-${newDoc.id}] to active context.`, 'system');
@@ -558,30 +617,88 @@
             const input = document.getElementById('api-key');
             if (input.value.trim().length > 10) {
                 apiKey = input.value.trim();
+                saveState();
                 document.getElementById('api-status-dot').classList.add('connected');
                 document.getElementById('api-status-text').innerText = 'Connected';
                 input.value = '******************';
                 input.disabled = true;
                 document.getElementById('send-btn').disabled = false;
-                appendMessage('Authentication successful. Ready to receive operational queries.', 'system');
+                document.getElementById('viz-btn').disabled = false;
+                
+                // Initialize Mermaid with Brutalist Nature Theme
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: 'base',
+                    themeVariables: {
+                        primaryColor: '#F4F6F4',
+                        primaryTextColor: '#1A1C1A',
+                        primaryBorderColor: '#2C3A32',
+                        lineColor: '#8A9A90',
+                        tertiaryColor: '#e2e8e4'
+                    }
+                });
+
+                appendMessage('Authentication successful. Ready to receive operational queries or generate visual workflows.', 'system');
             }
         }
 
-        function appendMessage(text, type) {
+        async function appendMessage(text, type) {
             const history = document.getElementById('chat-history');
             const msg = document.createElement('div');
             msg.className = `message msg-${type}`;
             
             // Allow basic HTML formatting for citations if it's a bot message
             if (type === 'bot') {
-                msg.innerHTML = text;
+                // Confidence Warning Banner
+                const confMatch = text.match(/CONFIDENCE:\s*(\d+)%/i);
+                if (confMatch && parseInt(confMatch[1]) < 90) {
+                    text = `<div style="background-color: #ffdddd; color: #a94442; padding: 8px; margin-bottom: 10px; border: 1px solid #ebccd1; font-weight: bold; font-size: 0.8rem; text-align: center;">⚠️ LOW AI CONFIDENCE: HUMAN VERIFICATION OF SOURCE DOCUMENTS REQUIRED</div>` + text;
+                }
+
+                // Format standard markdown bold to HTML bold
+                let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+                // Format Citations
+                formattedText = formattedText.replace(/\[DOC-(\d+)\]/g, '<span class="citation-badge" onclick="viewDocument($1)">[DOC-$1]</span>');
+                
+                // Handle Mermaid.js Blocks
+                let parts = formattedText.split(/(```mermaid[\s\S]*?```)/);
+                let htmlContent = '';
+                
+                parts.forEach(part => {
+                    if (part.startsWith('```mermaid')) {
+                        const mermaidCode = part.replace(/```mermaid\n?/, '').replace(/```$/, '');
+                        htmlContent += `<div class="mermaid">${mermaidCode}</div>`;
+                    } else {
+                        htmlContent += part.replace(/\n/g, '<br>');
+                    }
+                });
+                
+                msg.innerHTML = htmlContent;
             } else {
                 msg.innerText = text;
             }
             
             history.appendChild(msg);
             history.scrollTop = history.scrollHeight;
-            return msg; // Return element in case we want to update it
+
+            // Render any newly added mermaid diagrams
+            if (type === 'bot') {
+                try {
+                    const mermaidNodes = msg.querySelectorAll('.mermaid');
+                    if(mermaidNodes.length > 0) {
+                        await mermaid.run({ nodes: mermaidNodes });
+                    }
+                } catch (error) {
+                    console.error("Mermaid parsing error:", error);
+                    const mermaidNodes = msg.querySelectorAll('.mermaid');
+                    mermaidNodes.forEach(node => {
+                        node.innerHTML = `<div style="color: #d9534f; border: 1px solid #d9534f; background: #fdf0f0; padding: 10px; font-family: sans-serif; font-size: 0.9rem;"><strong>Visualization Error:</strong> The AI generated invalid flowchart syntax. Please try clicking 'Visualize Protocol' again.</div>`;
+                    });
+                }
+            }
+
+            return msg;
         }
 
         async function submitQuery() {
@@ -608,7 +725,7 @@
             });
 
             // 3. Simulate Agentic Workflow (Visual only)
-            const sysMsg = appendMessage('Master Agent routing query...', 'system');
+            const sysMsg = await appendMessage('Master Agent routing query...', 'system');
             await new Promise(r => setTimeout(r, 800));
             sysMsg.innerText = `Extracting context from [${activeDocs.map(d => `DOC-${d.id}`).join(', ')}]...`;
             await new Promise(r => setTimeout(r, 800));
@@ -642,11 +759,7 @@
 
                 if (response.ok) {
                     let botReply = data.candidates[0].content.parts[0].text;
-                    // Format standard markdown bold to HTML bold for our brutalist UI
-                    botReply = botReply.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                    // Format newlines
-                    botReply = botReply.replace(/\n/g, '<br>');
-                    appendMessage(botReply, 'bot');
+                    await appendMessage(botReply, 'bot');
                 } else {
                     appendMessage(`API ERROR: ${data.error?.message}`, 'system');
                 }
@@ -658,8 +771,135 @@
             document.getElementById('send-btn').disabled = false;
         }
 
-        // Initialize UI
-        renderSourceList();
+        // --- STREAMING_CHUNK: Flowchart Visualization Workflow ---
+        async function generateDiagram() {
+            if (!apiKey) return;
+
+            document.getElementById('viz-btn').disabled = true;
+            document.getElementById('send-btn').disabled = true;
+
+            const activeDocs = documents.filter(d => activeDocIds.has(d.id));
+            if (activeDocs.length === 0) {
+                appendMessage('ERROR: No active documents to visualize.', 'system');
+                document.getElementById('viz-btn').disabled = false;
+                document.getElementById('send-btn').disabled = false;
+                return;
+            }
+
+            let contextString = "AVAILABLE SOURCES:\n\n";
+            activeDocs.forEach(doc => {
+                contextString += `--- [DOC-${doc.id}] ${doc.title} ---\n${doc.content}\n\n`;
+            });
+
+            const sysMsg = await appendMessage('Data Visualization Agent extracting workflow constraints...', 'system');
+            
+            const prompt = `You are a Data Visualization Agent. Based ONLY on the AVAILABLE SOURCES, generate a process flowchart summarizing the core protocols.
+            You must output ONLY valid Mermaid.js code using 'graph TD' (top down). 
+            CRITICAL INSTRUCTION: To prevent syntax errors, ALWAYS wrap all node text in double quotes.
+            Do NOT include any markdown formatting, markdown code blocks (no \`\`\`), or conversational text outside of the Mermaid syntax itself.
+            Example format:
+            graph TD
+              A["Step 1 (Details)"] --> B{"Decision?"}
+              B -->|"Yes"| C["Step 2"]
+            `;
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: contextString },
+                                { text: prompt }
+                            ]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                sysMsg.style.display = 'none';
+
+                if (response.ok) {
+                    let mermaidCode = data.candidates[0].content.parts[0].text;
+                    // Clean up potential markdown formatting if the LLM disobeys the instruction
+                    mermaidCode = mermaidCode.replace(/```mermaid\n?/g, '').replace(/```\n?/g, '').trim();
+                    
+                    // Wrap in our standard format for the appendMessage function to catch
+                    const botReply = `Here is the visual representation of the active protocols:\n\n\`\`\`mermaid\n${mermaidCode}\n\`\`\``;
+                    await appendMessage(botReply, 'bot');
+                } else {
+                    appendMessage(`API ERROR: ${data.error?.message}`, 'system');
+                }
+            } catch (error) {
+                sysMsg.style.display = 'none';
+                appendMessage(`NETWORK ERROR: Failed to generate visualization.`, 'system');
+            }
+
+            document.getElementById('viz-btn').disabled = false;
+            document.getElementById('send-btn').disabled = false;
+        }
+
+        async function exportSitRep() {
+            if (!apiKey) {
+                alert("Please connect your API key first to generate a report.");
+                return;
+            }
+            
+            const historyEl = document.getElementById('chat-history');
+            const messages = Array.from(historyEl.querySelectorAll('.message')).map(m => m.innerText).join('\n\n');
+            
+            if (!messages) {
+                alert("No chat history to export.");
+                return;
+            }
+
+            const sysMsg = await appendMessage('System Log: Aggregating shift data and generating Daily SitRep...', 'system');
+            
+            // Hidden Prompting Strategy
+            const prompt = `You are an NGO reporting agent. Summarize the following chat history into a standard UN Situation Report format (Situation, Actions Taken, Resources Needed). Keep it extremely concise and professional.\n\nCHAT HISTORY:\n${messages}`;
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                const data = await response.json();
+                sysMsg.style.display = 'none';
+
+                if (response.ok) {
+                    const reportText = data.candidates[0].content.parts[0].text;
+                    
+                    // Generate local text file via Blob
+                    const blob = new Blob([reportText], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `SitRep_${new Date().toISOString().slice(0,10)}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    appendMessage('System Log: Daily SitRep successfully downloaded to device.', 'system');
+                } else {
+                    appendMessage('System Log: Failed to generate SitRep.', 'system');
+                }
+            } catch (e) {
+                sysMsg.style.display = 'none';
+                appendMessage('System Log: Network error during SitRep generation.', 'system');
+            }
+        }
+
+        // Initialize UI & State
+        window.onload = () => {
+            loadState();
+            renderSourceList();
+        };
         
         // Handle enter key in textarea
         document.getElementById('user-query').addEventListener('keydown', function(e) {
