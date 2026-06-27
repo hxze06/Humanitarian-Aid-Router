@@ -1,78 +1,55 @@
-# Humanitarian-Aid-Router
-Multi-Agent Humanitarian Aid Router
+# Multi-Agent Humanitarian Aid Router
 
-Overview
+## Executive Summary
+The **Multi-Agent Humanitarian Aid Router** is a high-fidelity, frontend-only research platform engineered for humanitarian field workers and NGO staff operating in disaster zones. 
 
-The Multi-Agent Humanitarian Aid Router is a lightweight, frontend-only application designed to serve as a multi-document research assistant for field workers, NGOs, and crisis responders.
+In crises, responders face "information overload"—massive volumes of dense policy manuals (SPHERE, IASC, UNHAS)—and high-stress environments where connectivity is unreliable or non-existent. This tool uses a **NotebookLM-inspired RAG (Retrieval-Augmented Generation) architecture** to allow workers to synthesize protocols into actionable, cited, and visualized plans in seconds, ensuring that aid delivery remains compliant, safe, and effective.
 
-Operating in disaster zones often means dealing with severely degraded bandwidth and high-stress cognitive loads. This tool solves this by using a NotebookLM-inspired architecture, allowing users to upload complex Standard Operating Procedures (SOPs) and query an agentic AI system to receive synthesized, directly cited action plans in seconds.
+---
 
-This project was developed as a capstone submission for a highly accredited certification program, emphasizing zero-dependency performance, strict source grounding, and accessible design.
+## The Humanitarian Problem
+Standard LLM interfaces are often insufficient for NGOs because:
+1. **Hallucination Risk:** Generative AI can invent dangerous medical/logistical protocols.
+2. **Context Fragmentation:** Information is scattered across disparate PDFs, DOCX, and text files.
+3. **Bandwidth Poverty:** Field operations often occur in environments with 2G/3G speeds or satellite-only connections, rendering framework-heavy (React/Angular) applications unusable.
 
-Key Features
+---
 
-Zero-Overhead Architecture: Built entirely with vanilla HTML5, CSS3, and ES6 JavaScript. No heavy frameworks (React/Vue/Angular) are used, ensuring immediate load times on 2G/3G satellite connections.
+## Technical Architecture
+This application is built with a **"Brutalist Academic"** philosophy—prioritizing function, speed, and reliability.
 
-Client-Side Document Parsing: Privacy-first file handling. Users can upload .txt, .pdf, and .docx files. Parsing happens entirely within the browser using lightweight web workers, ensuring sensitive NGO data never leaves the local machine unencrypted.
+*   **Zero-Dependency Core:** Pure vanilla HTML5, CSS3, and ES6 JavaScript. No external frameworks. This ensures instant load times even on heavily degraded connections.
+*   **Browser-Native Document Intelligence:**
+    *   Uses **PDF.js** and **Mammoth.js** to parse documents entirely on the client side. No sensitive NGO documentation ever leaves the device unencrypted to a server.
+*   **Agentic Orchestration:**
+    *   The system simulates a **Master Control Agent** pattern. When a user queries the system, the architecture visually stages the reasoning process—Retrieval, Strategy Generation, and Review—before synthesizing the final plan.
+*   **Integrated Visualization:**
+    *   Utilizes **Mermaid.js** to allow the AI to generate live, interactive process flowcharts, turning dense protocols into immediate, visual SOPs.
 
-Multi-Document Context Window: Users can toggle specific documents on or off to actively manage the LLM's context window, forcing the AI to synthesize answers only from verified, active SOPs.
+---
 
-Agentic Workflow Simulation: The UI visually maps a multi-agent reasoning process (Master Routing -> Knowledge Retrieval -> Strategy Generation -> Safety Review) before delivering an answer, building trust with the end-user.
+## Key Capabilities
+*   **Source-Grounded Reasoning:** The system enforces citation-based responses. Every claim made by the AI includes a source badge (e.g., `[DOC-1]`) that links back to the original text.
+*   **Multi-Document Synthesis:** Users toggle documents on or off in the sidebar to define the AI's "context window." This prevents cross-contamination of unrelated protocols.
+*   **Human-in-the-Loop (HITL) Safety:** Implements a visual confidence threshold warning. If the system's internal synthesis confidence drops below a specific margin, the UI flags a mandatory human verification banner.
+*   **Exportable Field Data:** Once a strategy is finalized, the system aggregates the chat history to generate a standardized **UN Situation Report (SitRep)**, which can be downloaded instantly as a text file for headquarters reporting.
+*   **Offline-First:** All API configurations, uploaded document text, and session preferences are persisted via `localStorage`, ensuring the tool remains functional even after a browser refresh.
 
-Brutalist Academic Design: Utilizes a high-contrast, strictly functional aesthetic inspired by academic repositories (arXiv/Sci-Hub), paired with a calming, nature-inspired color palette (Forest, Sage, Earth).
+---
 
-System Architecture (RAG)
+## Installation & Deployment
+1.  **Clone the repository** or download the `index.html` file.
+2.  **Deploy:** Since this is a single-file application, it can be hosted on any static file server or simply opened locally (`file://`) for field use.
+3.  **Authenticate:** Once opened, input a valid Google Gemini API Key in the header. The application will immediately establish a secure, encrypted session.
 
-The application utilizes a specialized Retrieval-Augmented Generation (RAG) workflow:
+---
 
-Ingestion: Local parsing of uploaded documents via pdf.js and mammoth.js.
+## Design Philosophy
+The UI utilizes a "Nature-Themed Brutalism" aesthetic. 
+*   **Color Palette:** Sage greens, forest darks, and earth tones provide a calming, professional environment for high-stress work.
+*   **Typography:** Strict use of Courier New and Serif stacks to match the feel of academic archives (Sci-Hub/arXiv), ensuring the text is readable and accessible in harsh sunlight or low-power screens.
 
-Context Construction: The system dynamically concatenates all "Active" document texts into an injected prompt.
+---
 
-Agentic Prompting: The Gemini 2.5 Flash API is called via REST with strict system instructions to act as a Humanitarian Orchestrator. It is constrained to answer only using the provided context and must cite sources using Document IDs (e.g., [DOC-1]).
-
-Delivery: The response is formatted into a highly readable, brutalist chat interface.
-
-Installation & Usage
-
-Because this application relies on a serverless, single-file architecture, setup is instantaneous.
-
-Prerequisites
-
-A modern web browser (Chrome, Firefox, Safari, Edge).
-
-A valid Google Gemini API Key.
-
-Running the Application
-
-Clone this repository or download the index.html file.
-
-Double-click index.html to open it directly in your web browser. No local server (npm start, python -m http.server) is strictly required, though it can be used.
-
-Authenticate: Enter your Gemini API key in the top navigation bar and click "Connect". (Note: The key is stored temporarily in session memory and is never saved to a database).
-
-Manage Sources: Use the left pane to view default Humanitarian Standards (SPHERE, UNHAS, IASC) or click + Upload File to add your own PDFs and DOCX files.
-
-Query the System: Ask the Orchestrator a question in the right pane (e.g., "What is the protocol for water sanitation near living areas?").
-
-Technical Stack
-
-Frontend UI: HTML5, CSS3 (CSS Grid/Flexbox), ES6 JavaScript.
-
-LLM Provider: Google Gemini 2.5 Flash API (REST).
-
-PDF Parsing: pdf.js (v3.11.174)
-
-DOCX Parsing: mammoth.js (v1.6.0)
-
-Certification Highlights & Architectural Decisions
-
-Hallucination Mitigation: Standard chatbots are dangerous in crisis scenarios. By enforcing a "Source Library" paradigm, the agent is mathematically constrained by the prompt structure to rely only on uploaded guidelines.
-
-Memory Management: Implemented Set() structures in JavaScript to handle active document contexts efficiently without duplicating payload data.
-
-Accessibility (WCAG): The UI enforces high contrast ratios between the text (#1A1C1A) and the background (#F4F6F4), utilizing readable Serif fonts for document viewing and Monospace for system logs.
-
-Disclaimer
-
-This tool is a functional prototype developed for educational and certification purposes. While it parses real documents and connects to a live LLM, any outputs generated during a real-world humanitarian crisis should be reviewed by a human expert before execution.
+## Disclaimer
+*This tool is a field-ready prototype designed to assist in decision-making and research. All AI-generated protocols, medical triage, or transport routing suggestions must be vetted by a human subject matter expert (SME) before implementation in a disaster setting.*
