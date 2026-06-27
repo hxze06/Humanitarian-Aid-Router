@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Humanitarian Aid Router | Multi-Document Researcher</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <style>
+        /* Strict Brutalist Academic & Nature Theme */
+        :root {
+            --forest-dark: #2C3A32;
+            --sage-green: #8A9A90;
+            --earth-brown: #5C4E43;
+            --paper-light: #F4F6F4;
+            --ink-black: #1A1C1A;
+            --highlight: #e2e8e4;
+            --border-thick: 2px solid var(--forest-dark);
+            --border-thin: 1px solid var(--sage-green);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: var(--paper-light);
+            color: var(--ink-black);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Top Header */
+        header {
+            border-bottom: var(--border-thick);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: white;
+        }
+
+        .logo-section h1 {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--forest-dark);
+        }
+
+        .api-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .api-section input {
+            padding: 5px 10px;
+            border: var(--border-thin);
+            outline: none;
+            font-family: monospace;
+            width: 250px;
+        }
+
+        .api-section button {
+            background-color: var(--forest-dark);
+            color: var(--paper-light);
+            border: none;
+            padding: 6px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #d9534f; /* Red/Offline */
+            border: 1px solid var(--ink-black);
+        }
+
+        .status-dot.connected {
+            background-color: #5cb85c; /* Green/Online */
+        }
+
+        /* Three-Pane Workspace */
+        .workspace {
+            display: grid;
+            grid-template-columns: 250px 1fr 350px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .pane {
+            border-right: var(--border-thick);
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            overflow: hidden;
+        }
+        .pane:last-child {
+            border-right: none;
+        }
+
+        .pane-header {
+            background-color: var(--forest-dark);
+            color: white;
+            padding: 8px 15px;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: var(--border-thick);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Left Pane: Sources */
+        .source-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: var(--paper-light);
+        }
+
+        .source-item {
+            border: var(--border-thin);
+            background-color: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+
+        .source-item:hover {
+            background-color: var(--highlight);
+        }
+
+        .source-item.viewing {
+            border-left: 4px solid var(--forest-dark);
+        }
+
+        .source-item input[type="checkbox"] {
+            margin-top: 3px;
+            cursor: pointer;
+        }
+
+        .source-title {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: var(--earth-brown);
+        }
+
+        .add-doc-area {
+            padding: 10px;
+            border-top: var(--border-thick);
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .add-doc-area button {
+            width: 100%;
+            padding: 8px;
+            background-color: var(--sage-green);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
+
+        /* Middle Pane: Viewer */
+        .viewer-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            font-family: 'Times New Roman', Times, serif; /* Academic readable font */
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: var(--ink-black);
+            background-color: white;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.02);
+        }
+        .viewer-content h2 {
+            margin-bottom: 15px;
+            color: var(--earth-brown);
+            border-bottom: var(--border-thin);
+            padding-bottom: 5px;
+        }
+
+        /* Right Pane: Agent Chat */
+        .chat-history {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background-color: var(--paper-light);
+        }
+
+        .message {
+            padding: 12px 15px;
+            border: var(--border-thin);
+            font-size: 0.9rem;
+            line-height: 1.4;
+            max-width: 90%;
+        }
+
+        .msg-user {
+            align-self: flex-end;
+            background-color: white;
+            border-right: 3px solid var(--earth-brown);
+        }
+
+        .msg-bot {
+            align-self: flex-start;
+            background-color: white;
+            border-left: 3px solid var(--sage-green);
+        }
+
+        .msg-system {
+            align-self: center;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.75rem;
+            color: var(--sage-green);
+            background: none;
+            border: none;
+            text-align: center;
+            font-style: italic;
+        }
+
+        .citation-badge {
+            display: inline-block;
+            background-color: var(--highlight);
+            color: var(--forest-dark);
+            font-size: 0.7rem;
+            font-weight: bold;
+            padding: 2px 5px;
+            margin: 0 2px;
+            border: 1px solid var(--sage-green);
+            cursor: help;
+        }
+
+        .chat-input-area {
+            border-top: var(--border-thick);
+            padding: 10px;
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .chat-input-area textarea {
+            width: 100%;
+            height: 60px;
+            padding: 8px;
+            border: var(--border-thin);
+            resize: none;
+            font-family: inherit;
+            outline: none;
+        }
+        
+        .chat-input-area button {
+            align-self: flex-end;
+            background-color: var(--earth-brown);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .chat-input-area button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Modal for adding documents manually */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal {
+            background: white;
+            border: var(--border-thick);
+            width: 500px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .modal input, .modal textarea {
+            width: 100%;
+            padding: 10px;
+            border: var(--border-thin);
+            font-family: inherit;
+        }
+        .modal textarea {
+            height: 150px;
+            resize: none;
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .btn-cancel { background: white; color: var(--ink-black); border: var(--border-thin); padding: 8px 15px; cursor: pointer;}
+        .btn-save { background: var(--forest-dark); color: white; border: none; padding: 8px 15px; cursor: pointer;}
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-section">
+            <h1>Humanitarian Aid Router</h1>
+        </div>
+        <div class="api-section">
+            <span id="api-status-text">Offline</span>
+            <div class="status-dot" id="api-status-dot"></div>
+            <input type="password" id="api-key" placeholder="Enter Gemini API Key">
+            <button onclick="connectAPI()">Connect</button>
+        </div>
+    </header>
+
+    <div class="workspace">
+        
+        <!-- Left Pane: Source Library -->
+        <div class="pane">
+            <div class="pane-header">
+                <span>Source Library</span>
+            </div>
+            <div class="source-list" id="source-list">
+                <!-- Documents injected via JS -->
+            </div>
+            <div class="add-doc-area">
+                <!-- Hidden file input for text, pdf, and docx files -->
+                <input type="file" id="file-upload" accept=".txt,.pdf,.docx" style="display: none;" onchange="handleFileUpload(event)">
+                <button onclick="document.getElementById('file-upload').click()">+ Upload File (.txt, .pdf, .docx)</button>
+                <button onclick="openModal()" style="background-color: var(--earth-brown);">+ Paste Text</button>
+            </div>
+        </div>
+
+        <!-- Middle Pane: Document Viewer -->
+        <div class="pane">
+            <div class="pane-header">
+                <span>Document Viewer</span>
+                <span id="viewer-doc-id" style="color: var(--sage-green);">N/A</span>
+            </div>
+            <div class="viewer-content" id="viewer-content">
+                <p style="color: var(--sage-green); font-style: italic; text-align: center; margin-top: 50px;">
+                    Select a document from the Source Library to read its contents here.
+                </p>
+            </div>
+        </div>
+
+        <!-- Right Pane: Researcher Agent -->
+        <div class="pane">
+            <div class="pane-header">
+                <span>Agentic Orchestrator</span>
+            </div>
+            <div class="chat-history" id="chat-history">
+                <div class="message msg-bot">
+                    <strong>System Initialization:</strong><br>
+                    Please provide an API key. I am ready to analyze selected sources and synthesize response protocols.
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <textarea id="user-query" placeholder="Ask a question about the active documents..."></textarea>
+                <button id="send-btn" onclick="submitQuery()" disabled>Send Query</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Document Modal -->
+    <div class="modal-overlay" id="add-modal">
+        <div class="modal">
+            <h2 style="font-family: 'Courier New', Courier, monospace; color: var(--forest-dark);">Add New Source</h2>
+            <input type="text" id="manual-title" placeholder="Document Title (e.g., Protocol 204)">
+            <textarea id="manual-content" placeholder="Paste document content here..."></textarea>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn-save" onclick="saveManualDoc()">Save Document</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let apiKey = '';
+        let docCounter = 3; 
+        
+        // Initial mocked documents updated with definitive humanitarian standards
+        let documents = [
+            { id: 1, title: "SPHERE Standards: WASH", content: "WATER SUPPLY & SANITATION PROTOCOL:\n\n1. WATER QUANTITY: Minimum 15 liters per person per day for drinking, cooking, and personal hygiene.\n2. WATER QUALITY: Free residual chlorine (FRC) must be 0.2–0.5 mg/L at the point of delivery.\n3. EXCRETA MANAGEMENT: Maximum of 20 people per toilet. Toilets must be at least 30 meters from groundwater sources and 50 meters from communal living areas.\n4. HYGIENE PROMOTION: Handwashing stations must be available at all latrines and food preparation areas with soap or ash." },
+            { id: 2, title: "UNHAS Cold Chain Directive", content: "VACCINE & PERISHABLE LOGISTICS:\n\n1. TEMPERATURE CONTROL: All critical medical supplies must maintain a strict 2°C to 8°C cold chain. Continuous temperature data loggers are mandatory during transit.\n2. VEHICLE CLEARANCE: Level 4 Armored or UN-marked refrigerated transport is required in active conflict zones. Movement must be logged with the UN Department of Safety and Security (UNDSS) 24 hours prior to departure.\n3. CONTINGENCY: If temperature breaches 8°C for more than 10 minutes, the cargo is quarantined pending viability testing." },
+            { id: 3, title: "IASC Risk Mitigation", content: "SITE PLANNING & SAFEGUARDING:\n\n1. CAMP LAYOUT: Ensure clear, safe pathways to essential services (water points, latrines, food distribution) that are well-lit at night to mitigate Gender-Based Violence (GBV) risks.\n2. REFERRAL PATHWAYS: A multisectoral GBV referral pathway must be established within 48 hours of camp setup, including clinical care, psychosocial support, and legal services.\n3. CONSULTATION: Women and marginalized groups must be actively consulted in the placement of WASH facilities." }
+        ];
+
+        // Set tracking which documents are "active" for the AI context
+        let activeDocIds = new Set([1, 3]);
+        let viewingDocId = null;
+
+        // --- Core UI Functions ---
+        function renderSourceList() {
+            const list = document.getElementById('source-list');
+            list.innerHTML = '';
+
+            documents.forEach(doc => {
+                const isActive = activeDocIds.has(doc.id);
+                const isViewing = viewingDocId === doc.id;
+
+                const docEl = document.createElement('div');
+                docEl.className = `source-item ${isViewing ? 'viewing' : ''}`;
+                // Clicking the main body views the document
+                docEl.onclick = () => viewDocument(doc.id);
+
+                docEl.innerHTML = `
+                    <input type="checkbox" title="Toggle AI Context" ${isActive ? 'checked' : ''} onclick="toggleDocContext(event, ${doc.id})">
+                    <div>
+                        <div class="source-title">[DOC-${doc.id}] ${doc.title}</div>
+                        <div style="font-size: 0.7rem; color: var(--sage-green);">Context: ${isActive ? 'Active' : 'Inactive'}</div>
+                    </div>
+                `;
+                list.appendChild(docEl);
+            });
+        }
+
+        function viewDocument(id) {
+            viewingDocId = id;
+            const doc = documents.find(d => d.id === id);
+            if(doc) {
+                document.getElementById('viewer-doc-id').innerText = `[DOC-${doc.id}]`;
+                document.getElementById('viewer-content').innerHTML = `
+                    <h2>${doc.title}</h2>
+                    <p style="white-space: pre-wrap;">${doc.content}</p>
+                `;
+            }
+            renderSourceList(); // Update highlight
+        }
+
+        function toggleDocContext(event, id) {
+            event.stopPropagation(); // Prevent viewing when clicking checkbox
+            if (activeDocIds.has(id)) {
+                activeDocIds.delete(id);
+            } else {
+                activeDocIds.add(id);
+            }
+            renderSourceList();
+        }
+
+        // --- STREAMING_CHUNK: Document Upload & Modal Logic ---
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            const title = file.name.replace(/\.[^/.]+$/, ""); // Remove extension for title
+
+            // Add loading message
+            appendMessage(`System Log: Parsing ${file.name}...`, 'system');
+
+            if (ext === 'txt') {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    addNewDocument(title, e.target.result);
+                };
+                reader.readAsText(file);
+            } else if (ext === 'docx') {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const result = await mammoth.extractRawText({arrayBuffer: e.target.result});
+                        addNewDocument(title, result.value || "[Empty or unreadable DOCX]");
+                    } catch (error) {
+                        alert("Error parsing DOCX file: " + error.message);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else if (ext === 'pdf') {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const typedarray = new Uint8Array(e.target.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        let fullText = "";
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            fullText += textContent.items.map(item => item.str).join(" ") + "\n\n";
+                        }
+                        addNewDocument(title, fullText.trim() || "[Empty or unreadable PDF]");
+                    } catch (error) {
+                        alert("Error parsing PDF file: " + error.message);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                alert("Unsupported file type. Please upload .txt, .pdf, or .docx");
+            }
+            
+            event.target.value = ''; // Reset input
+        }
+
+        function openModal() { document.getElementById('add-modal').style.display = 'flex'; }
+        
+        function closeModal() { 
+            document.getElementById('add-modal').style.display = 'none'; 
+            document.getElementById('manual-title').value = '';
+            document.getElementById('manual-content').value = '';
+        }
+
+        function saveManualDoc() {
+            const title = document.getElementById('manual-title').value.trim() || 'Untitled Source';
+            const content = document.getElementById('manual-content').value.trim();
+            if(!content) {
+                alert("Cannot save an empty document.");
+                return;
+            }
+            addNewDocument(title, content);
+            closeModal();
+        }
+
+        function addNewDocument(title, content) {
+            docCounter++;
+            const newDoc = { id: docCounter, title: title, content: content };
+            documents.push(newDoc);
+            activeDocIds.add(newDoc.id); // Default to active
+            renderSourceList();
+            viewDocument(newDoc.id); // Auto-view the new doc
+            appendMessage(`System Log: Added new source [DOC-${newDoc.id}] to active context.`, 'system');
+        }
+
+        // --- STREAMING_CHUNK: API & Agent Simulation Logic ---
+        function connectAPI() {
+            const input = document.getElementById('api-key');
+            if (input.value.trim().length > 10) {
+                apiKey = input.value.trim();
+                document.getElementById('api-status-dot').classList.add('connected');
+                document.getElementById('api-status-text').innerText = 'Connected';
+                input.value = '******************';
+                input.disabled = true;
+                document.getElementById('send-btn').disabled = false;
+                appendMessage('Authentication successful. Ready to receive operational queries.', 'system');
+            }
+        }
+
+        function appendMessage(text, type) {
+            const history = document.getElementById('chat-history');
+            const msg = document.createElement('div');
+            msg.className = `message msg-${type}`;
+            
+            // Allow basic HTML formatting for citations if it's a bot message
+            if (type === 'bot') {
+                msg.innerHTML = text;
+            } else {
+                msg.innerText = text;
+            }
+            
+            history.appendChild(msg);
+            history.scrollTop = history.scrollHeight;
+            return msg; // Return element in case we want to update it
+        }
+
+        async function submitQuery() {
+            const inputEl = document.getElementById('user-query');
+            const query = inputEl.value.trim();
+            if (!query || !apiKey) return;
+
+            // 1. Display user query
+            appendMessage(query, 'user');
+            inputEl.value = '';
+            document.getElementById('send-btn').disabled = true;
+
+            // 2. Build Context from Active Documents
+            const activeDocs = documents.filter(d => activeDocIds.has(d.id));
+            if (activeDocs.length === 0) {
+                appendMessage('ERROR: No active documents in Source Library to analyze.', 'system');
+                document.getElementById('send-btn').disabled = false;
+                return;
+            }
+
+            let contextString = "AVAILABLE SOURCES:\n\n";
+            activeDocs.forEach(doc => {
+                contextString += `--- [DOC-${doc.id}] ${doc.title} ---\n${doc.content}\n\n`;
+            });
+
+            // 3. Simulate Agentic Workflow (Visual only)
+            const sysMsg = appendMessage('Master Agent routing query...', 'system');
+            await new Promise(r => setTimeout(r, 800));
+            sysMsg.innerText = `Extracting context from [${activeDocs.map(d => `DOC-${d.id}`).join(', ')}]...`;
+            await new Promise(r => setTimeout(r, 800));
+            sysMsg.innerText = 'Strategy Review Agent synthesizing final protocol...';
+            
+            // 4. Gemini API Call
+            const systemPrompt = `You are an expert Humanitarian Logistics and Medical AI. 
+            You must answer the user's query STRICTLY based on the provided AVAILABLE SOURCES. 
+            Do not use outside knowledge. 
+            If the answer is not in the sources, state that clearly.
+            When you use information from a source, you MUST cite it using the document ID in brackets, e.g., <span class="citation-badge">[DOC-1]</span>. 
+            Use clear, brutalist, academic formatting (bullet points, bold text).`;
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        system_instruction: { parts: [{ text: systemPrompt }] },
+                        contents: [{
+                            parts: [
+                                { text: contextString },
+                                { text: `USER QUERY: ${query}` }
+                            ]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                sysMsg.style.display = 'none'; // hide loading text
+
+                if (response.ok) {
+                    let botReply = data.candidates[0].content.parts[0].text;
+                    // Format standard markdown bold to HTML bold for our brutalist UI
+                    botReply = botReply.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    // Format newlines
+                    botReply = botReply.replace(/\n/g, '<br>');
+                    appendMessage(botReply, 'bot');
+                } else {
+                    appendMessage(`API ERROR: ${data.error?.message}`, 'system');
+                }
+            } catch (error) {
+                sysMsg.style.display = 'none';
+                appendMessage(`NETWORK ERROR: Ensure API key is valid and you have internet access.`, 'system');
+            }
+
+            document.getElementById('send-btn').disabled = false;
+        }
+
+        // Initialize UI
+        renderSourceList();
+        
+        // Handle enter key in textarea
+        document.getElementById('user-query').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitQuery();
+            }
+        });
+
+    </script>
+</body>
+</html>
